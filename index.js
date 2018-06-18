@@ -3,15 +3,17 @@
 const fs = require('fs');
 const inquirer = require('inquirer');
 
-console.log('AWS Profile Switcher');
-
-const homeDir = process.env['HOME']
+const homeDir = process.env['HOME'];
+const fileToRead = process.env['AWSP_FILE_TO_READ'].replace('~', homeDir) || `${homeDir}/.aws/config`;
 const profileRegex = /\[profile .*]/g;
 const bracketsRemovalRegx = /(\[profile )|(\])/g;
-const clearProfileChoice = '*clear*';
+const defaultProfileChoice = 'default';
 
 const promptProfileChoice = (data) => {
-  const matches = data.match(profileRegex);
+  const awsProfiles = data[0];
+  const selectedProfile = data[1];
+  
+  const matches = awsProfiles.match(profileRegex);
 
   if (!matches) {
     console.log('No profiles found.');
@@ -25,14 +27,15 @@ const promptProfileChoice = (data) => {
     return match.replace(bracketsRemovalRegx, '');
   });
 
-  profiles.push(clearProfileChoice);
+  profiles.push(defaultProfileChoice);
 
   const profileChoice = [
     {
       type: 'list',
       name: 'profile',
       message: 'Choose a profile',
-      choices: profiles
+      choices: profiles,
+      default: selectedProfile
     }
   ];
 
@@ -41,7 +44,7 @@ const promptProfileChoice = (data) => {
 
 const readAwsConfig = () => {
   return new Promise((resolve, reject) => {
-    fs.readFile(`${homeDir}/.aws/config`, 'utf8', (err, data) => {
+    fs.readFile(fileToRead, 'utf8', (err, data) => {
       if (err) {
         reject(err);
       } else {
@@ -51,9 +54,22 @@ const readAwsConfig = () => {
   });
 };
 
+const readAwspConfig = () => {
+  return new Promise((resolve, reject) => {
+    fs.readFile(`${homeDir}/.awsp`, 'utf8', (err, data) => {
+      if (err) {
+        // if there is an error (such as file doesn't exist yet), use the default
+        resolve(defaultProfileChoice);
+      } else {
+        resolve(data);
+      }
+    });
+  });
+};
+
 const writeToConfig = (answers) => {
   const profileChoice =
-        answers.profile === clearProfileChoice ? '' : answers.profile;
+        answers.profile === defaultProfileChoice ? '' : answers.profile;
 
   return new Promise((resolve, reject) => {
     fs.writeFile(`${homeDir}/.awsp`, profileChoice, { flag: 'w' }, function (err) {
@@ -66,7 +82,7 @@ const writeToConfig = (answers) => {
   });
 };
 
-readAwsConfig()
+Promise.all([readAwsConfig, readAwspConfig])
   .then(promptProfileChoice)
   .then(writeToConfig)
   .catch(error => {
