@@ -4,15 +4,16 @@ const fs = require('fs');
 const inquirer = require('inquirer');
 
 const homeDir = process.env['HOME'];
+const useCredentials = process.env['AWSP_USE_CREDENTIALS'] === 'true';
 const fileToRead = process.env['AWSP_FILE_TO_READ'].replace('~', homeDir) || `${homeDir}/.aws/config`;
-const profileRegex = /\[profile .*]/g;
-const bracketsRemovalRegx = /(\[profile )|(\])/g;
+const profileRegex = useCredentials ? /\[.*]/g : /\[profile .*]/g;
+const bracketsRemovalRegx = useCredentials ? /(\[)|(\])/g : /(\[profile )|(\])/g;
 const defaultProfileChoice = 'default';
 
 const promptProfileChoice = (data) => {
   const awsProfiles = data[0];
   const selectedProfile = data[1];
-  
+
   const matches = awsProfiles.match(profileRegex);
 
   if (!matches) {
@@ -82,7 +83,7 @@ const writeToConfig = (answers) => {
   });
 };
 
-Promise.all([readAwsConfig, readAwspConfig])
+Promise.all([readAwsConfig(), readAwspConfig()])
   .then(promptProfileChoice)
   .then(writeToConfig)
   .catch(error => {
